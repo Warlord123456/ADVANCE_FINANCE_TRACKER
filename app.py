@@ -22,6 +22,28 @@ import pdf2image
 from extensions import db
 from models import Receipt, ReceiptItem
 
+#########################################
+#     Configure Tesseract Executable    #
+#########################################
+import sys
+
+# Determine the absolute path to the current directory.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construct the path to the Tesseract executable located in the local 'tesseract' folder.
+if sys.platform.startswith('win'):
+    # For Windows systems, the executable is typically named 'tesseract.exe'
+    tesseract_executable = os.path.join(current_dir, 'tesseract', 'tesseract.exe')
+else:
+    # For Linux/macOS systems, the executable might simply be 'tesseract'
+    tesseract_executable = os.path.join(current_dir, 'tesseract', 'tesseract')
+
+# Optional: Check if the executable exists and log a warning if it doesn't.
+if not os.path.exists(tesseract_executable):
+    logging.warning(f"Tesseract executable not found at: {tesseract_executable}")
+
+# Set the Tesseract command for pytesseract.
+pytesseract.pytesseract.tesseract_cmd = tesseract_executable
 
 #########################################
 #        Helper Conversion Functions    #
@@ -300,11 +322,14 @@ def create_app() -> Flask:
                 app.logger.exception(f"Error processing file {file_path}: {e}")
                 return None
 
-            if not ocr_text:
+            if not ocr_text.strip():
                 app.logger.warning(f"No OCR text extracted from {file_path}")
                 return None
 
             details = extract_receipt_details(ocr_text)
+            # Ensure a merchant is set (using a default value if needed)
+            if not details.get('merchant'):
+                details['merchant'] = "Unknown Merchant"
             category = categorize_expense(details.get('merchant'), details.get('items'))
 
             # Convert extracted values to proper types.
