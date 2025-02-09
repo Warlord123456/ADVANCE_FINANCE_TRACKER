@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Advanced OCR Receipt Scanning System</title>
+  <!-- Bootstrap CSS (Bootstrap 5.3) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Font Awesome 6 -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+
+  <style>
+    /*============================================================================
+      GLOBAL VARIABLES & THEME OVERRIDES
+    =============================================================================*/
+    :root {
+      --color-bg: #ffffff;
+      --color-text: #333333;
+      --color-primary: #0056b3;
+      --color-primary-hover: #003d80;
+      --color-bg-secondary: #f5f7fa;
+      --border-color: rgba(0, 0, 0, 0.1);
+      --shadow-color: rgba(0, 0, 0, 0.1);
+      --font-family: 'Roboto', sans-serif;
+      --font-size: 1rem;
+      --navbar-padding-vertical: 0.5rem;
+      --navbar-padding-horizontal: 1rem;
+      --navbar-brand-font-size: 1.25rem;
+      --navbar-brand-font-weight: 500;
+      --nav-link-padding: 0.5rem 1rem;
+      --nav-link-border-radius: 4px;
+      --nav-link-active-font-weight: 600;
+      --input-padding: 0.75rem 1rem;
+      --btn-padding: 0.75rem 1rem;
+      --border-radius: 0.5rem;
+      --transition-duration: 0.3s;
+      --transition: all var(--transition-duration) ease;
+      --focus-shadow: 0 0 0 3px rgba(0, 86, 179, 0.25);
+    }
+
+    /* Dark mode overrides */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg: #333333;
+        --color-text: #f8f9fa;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --shadow-color: rgba(0, 0, 0, 0.3);
+      }
+    }
+    body.dark-mode {
+      --color-bg: #333333;
+      --color-text: #f8f9fa;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --shadow-color: rgba(0, 0, 0, 0.3);
+    }
+
+    /*============================================================================
+      NAVBAR BASE & GENERAL ELEMENT STYLES
+    =============================================================================*/
+    .navbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--navbar-padding-vertical) var(--navbar-padding-horizontal);
+      background-color: var(--color-bg);
+      box-shadow: 0 2px 4px var(--shadow-color);
+      transition: var(--transition);
+    }
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: var(--navbar-brand-font-size);
+      font-weight: var(--navbar-brand-font-weight);
+      color: rgb(0, 0, 0);
+      text-decoration: none;
+      transition: var(--transition);
+    }
+    .navbar-brand:hover,
+    .navbar-brand:focus-visible {
+      color: var(--color-primary);
+      transform: translateY(-1px);
+      outline: none;
+    }
+    .navbar-brand:focus-visible {
+      box-shadow: var(--focus-shadow);
+    }
+    .navbar-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .nav-link {
+      position: relative;
+      padding: var(--nav-link-padding);
+      color: rgb(0, 0, 0);
+      text-decoration: none;
+      border-radius: var(--nav-link-border-radius);
+      transition: var(--transition);
+    }
+    .nav-link:hover {
+      color: var(--color-primary);
+      background-color: rgba(0, 86, 179, 0.05);
+    }
+    .nav-link:focus-visible {
+      outline: none;
+      box-shadow: var(--focus-shadow);
+    }
+    .nav-link.active {
+      color: var(--color-primary);
+      font-weight: var(--nav-link-active-font-weight);
+      background-color: rgba(0, 86, 179, 0.1);
+    }
+    .navbar-toggler {
+      position: relative;
+      width: 2.5rem;
+      height: 2.5rem;
+      padding: 0.5rem;
+      border-radius: 50%;
+      transition: var(--transition);
+      background: none;
+      border: none;
+    }
+    .navbar-toggler:hover {
+      background-color: rgba(0, 0, 0, 0.05);
+    }
+    .navbar-toggler:focus-visible {
+      outline: none;
+      box-shadow: var(--focus-shadow);
+    }
+    .navbar-toggler-icon {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      transition: transform var(--transition-duration) ease;
+    }
+    .navbar-toggler[aria-expanded="true"] .navbar-toggler-icon {
+      transform: translate(-50%, -50%) rotate(90deg);
+    }
+    @media (max-width: 768px) {
+      .navbar {
+        gap: 0.75rem;
+      }
+      .navbar-collapse {
+        width: 100%;
+        height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition: all 0.3s ease-out;
+      }
+      .navbar-collapse.show {
+        height: auto;
+        opacity: 1;
+        margin-top: 0.5rem;
+      }
+      .navbar-nav {
+        flex-direction: column;
+        gap: 0;
+      }
+      .nav-link {
+        width: 100%;
+        padding: 1rem;
+        border-top: 1px solid var(--border-color);
+      }
+      .nav-link:first-child {
+        border-top: none;
+      }
+    }
+    .navbar-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 1020;
+    }
+    .navbar-scrolled {
+      box-shadow: 0 2px 4px var(--shadow-color);
+    }
+
+    /*============================================================================
+      NAVBAR CONTROLS: SEARCH FORM & DARK MODE TOGGLE
+    =============================================================================*/
+    .navbar-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 1.5rem;
+      font-family: var(--font-family);
+    }
+    .navbar-search {
+      position: relative;
+      flex: 0 0 auto;
+      max-width: 250px;
+    }
+    .navbar-search input[type="search"] {
+      width: 100%;
+      height: 2.5rem;
+      padding: 0.5rem 3rem 0.5rem 1rem;
+      font-size: var(--font-size);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      background: var(--color-text);
+      color: var(--color-bg);
+      transition: border var(--transition-duration) ease, box-shadow var(--transition-duration) ease;
+      outline: none;
+    }
+    .navbar-search input[type="search"]:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.25);
+    }
+    .navbar-search .search-icon {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.25rem;
+      color: rgb(0 0 0);;
+      pointer-events: none;
+      transition: color var(--transition-duration) ease;
+    }
+    .navbar-search input[type="search"]:focus + .search-icon {
+      color: var(--color-primary);
+    }
+
+    .fa-sun:before {
+    content: "\f185";
+    color: #000000;
+    }
+    .fa-moon:before {
+    content: "\f186";
+    color: #000000;
+}
+
+
+    /* Improved Dark Mode Toggle Button CSS */
+.dark-mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 30px;
+  position: relative;
+}
+
+/* Hide the native checkbox */
+.dark-mode-toggle input[type="checkbox"] {
+  display: none;
+}
+
+/* Toggle container styled as a pill */
+.dark-mode-toggle label {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
+  border: 2px solid var(--border-color);
+  border-radius: 999px;
+  cursor: pointer;
+  position: relative;
+  transition: background-color var(--transition-duration) ease,
+              border-color var(--transition-duration) ease;
+}
+
+/* The toggle knob */
+.dark-mode-toggle label::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 24px;
+  height: 24px;
+  background-color: var(--color-bg);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform var(--transition-duration) ease,
+              background-color var(--transition-duration) ease;
+  z-index: 2;
+}
+
+/* Positioning and styling the icons */
+.dark-mode-toggle label .toggle-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+  color: var(--color-text);
+  transition: opacity var(--transition-duration) ease;
+  z-index: 1;
+}
+.dark-mode-toggle label .sun {
+  left: 10px;
+  opacity: 1;
+}
+.dark-mode-toggle label .moon {
+  right: 10px;
+  opacity: 0.4;
+}
+
+/* Checked state: update background and border, move the knob */
+.dark-mode-toggle input[type="checkbox"]:checked + label {
+  background: linear-gradient(45deg, #d0e2ff, #b0c4ff);
+  border-color: var(--color-primary);
+}
+.dark-mode-toggle input[type="checkbox"]:checked + label::after {
+  transform: translateX(30px);
+}
+
+/* Hover effect for better feedback */
+.dark-mode-toggle label:hover {
+  border-color: var(--color-primary-hover);
+}
+
+/* Icon opacity changes based on toggle state */
+.dark-mode-toggle input[type="checkbox"]:checked + label .sun {
+  opacity: 0.4;
+}
+.dark-mode-toggle input[type="checkbox"]:checked + label .moon {
+  opacity: 1;
+}
+
+
+    /*============================================================================
+      MOBILE AND EXTRA SMALL ADJUSTMENTS
+    =============================================================================*/
+    /* For mobile devices (max-width: 768px) */
+    @media (max-width: 768px) {
+      .navbar-controls {
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+      }
+      .navbar-search {
+        max-width: 100%;
+        width: 100%;
+      }
+      .dark-mode-toggle {
+        margin-top: 0.5rem;
+      }
+      
+    }
+    /* For extra small devices (max-width: 576px) */
+    @media (max-width: 576px) {
+      .navbar-controls {
+        width: 100%;
+      }
+      .navbar-search {
+        max-width: 100%;
+        width: 100%;
+      }
+      .dark-mode-toggle {
+        width: 50px;
+        height: 25px;
+      }
+      .dark-mode-toggle label::after {
+        width: 20px;
+        height: 20px;
+        top: 2px;
+        left: 2px;
+      }
+      .dark-mode-toggle input[type="checkbox"]:checked + label::after {
+        transform: translateX(25px);
+      }
+      .dark-mode-toggle .toggle-icon {
+        font-size: 1rem;
+      }
+      .dark-mode-toggle label .sun {
+        left: 3px;
+        top: 12px;
+      }
+      
+      .dark-mode-toggle label .moon {
+        right: 3px;
+        top: 12px;
+      }
+    }
+    mark.search-highlight {
+  background: yellow;
+  color: black;
+}
+.dark-mode .navbar-search input[type="search"] {
+    width: 100%;
+    height: 2.5rem;
+    padding: 0.5rem 3rem 0.5rem 1rem;
+    font-size: var(--font-size);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--color-bg);
+    color: var(--color-bg);
+    transition: border var(--transition-duration)ease, box-shadow var(--transition-duration)ease;
+    outline: none;}
+
+  </style>
+</head>
+<body>
+  <!-- Improved Navigation Bar -->
+  <nav class="navbar navbar-expand-lg sticky-top" id="mainNav">
+    <div class="container">
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <i class="fa-solid fa-receipt me-2"></i> Receipt Scanner
+      </a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#mainNavbar"
+        aria-controls="mainNavbar"
+        aria-expanded="false"
+        aria-label="Toggle navigation"
+      >
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="mainNavbar">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item {% if request.endpoint=='index' %}active{% endif %}">
+            <a class="nav-link" href="{{ url_for('index') }}">
+              <i class="fa-solid fa-gauge-high me-1"></i> Dashboard
+            </a>
+          </li>
+          <li class="nav-item {% if request.endpoint=='upload' %}active{% endif %}">
+            <a class="nav-link" href="{{ url_for('upload') }}">
+              <i class="fa-solid fa-upload me-1"></i> Upload Receipt
+            </a>
+          </li>
+          <li class="nav-item {% if request.endpoint=='reports' %}active{% endif %}">
+            <a class="nav-link" href="{{ url_for('reports') }}">
+              <i class="fa-solid fa-chart-line me-1"></i> Reports
+            </a>
+          </li>
+        </ul>
+        <!-- Navbar Controls Container -->
+        <div class="navbar-controls">
+          <!-- Search Form -->
+          <form id="searchForm" class="navbar-search">
+            <input id="searchInput" type="search" placeholder="Search receipts" aria-label="Search receipts" />
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          </form>
+          <!-- Dark Mode Toggle Switch with Icons -->
+          <div class="dark-mode-toggle">
+            <input type="checkbox" id="darkModeSwitch" />
+            <label for="darkModeSwitch" aria-label="Toggle dark mode">
+              <span class="toggle-icon sun"><i class="fa-solid fa-sun"></i></span>
+              <span class="toggle-icon moon"><i class="fa-solid fa-moon"></i></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content Area -->
+  <div id="mainContent" class="container mt-4">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+
+  <!-- Footer (optional) -->
+  <footer class="text-center py-3 mt-4">
+    <div class="container">
+      <p class="mb-0">&copy; {{ current_year }} Advanced OCR Receipt Scanning System</p>
+    </div>
+  </footer>
+
+  <!-- Custom Script -->
+  <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+  
+  <!-- Mark.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mark.js/8.11.1/mark.min.js"></script>
+
+
+  <!-- Navbar Collapse on Link Click for Mobile -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const navLinks = document.querySelectorAll(".navbar-nav .nav-link");
+      const navbarToggler = document.querySelector(".navbar-toggler");
+      navLinks.forEach((link) => {
+        link.addEventListener("click", function () {
+          if (window.getComputedStyle(navbarToggler).display !== "none") {
+            navbarToggler.click();
+          }
+        });
+      });
+    });
+  </script>
+  <!-- Dark Mode Toggle Script -->
+  <script>
+    document.getElementById("darkModeSwitch").addEventListener("change", function () {
+      document.body.classList.toggle("dark-mode", this.checked);
+      if (this.checked) {
+        localStorage.setItem("darkMode", "enabled");
+      } else {
+        localStorage.setItem("darkMode", "disabled");
+      }
+    });
+    document.addEventListener("DOMContentLoaded", function () {
+      if (localStorage.getItem("darkMode") === "enabled") {
+        document.getElementById("darkModeSwitch").checked = true;
+        document.body.classList.add("dark-mode");
+      }
+    });
+  </script>
+  <!-- Search Functionality using mark.js -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // Check if the required elements exist
+      const searchForm = document.getElementById("searchForm");
+      const searchInput = document.getElementById("searchInput");
+      const mainContent = document.getElementById("mainContent");
+      
+      if (!searchForm || !searchInput || !mainContent) {
+        console.error("Search functionality: Required elements not found. " +
+                      "Ensure that 'searchForm', 'searchInput', and 'mainContent' exist in your HTML.");
+        return;
+      }
+      
+      // Add submit event listener to the search form
+      searchForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        clearHighlights();
+        const query = searchInput.value.trim();
+        if (query !== "") {
+          // Create a new Mark.js instance for the main content container
+          const instance = new Mark(mainContent);
+          instance.mark(query, {
+            element: "mark",
+            className: "search-highlight"
+          });
+        }
+      });
+  
+      // Optional: Clear highlights when the search input is cleared
+      searchInput.addEventListener("input", function () {
+        if (this.value.trim() === "") {
+          clearHighlights();
+        }
+      });
+      
+      // Function to clear previous highlights
+      function clearHighlights() {
+        const instance = new Mark(mainContent);
+        instance.unmark();
+      }
+    });
+  </script>
+  
+  
+</body>
+</html>

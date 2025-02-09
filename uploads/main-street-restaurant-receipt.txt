@@ -1,0 +1,31 @@
+Main Street Restaurant
+6332 Business Drive
+Suite 528
+Palo Alto California 94301
+5375~-1628095
+
+Fri 04/07/2017 11:36 AM
+
+Merchant ID: 9hqjxvufdr
+Terminal ID: 11111
+
+Transaction ID: #e6d598ef
+Type: CREDIT
+
+PURCHASE
+Number : XXXXAXXXXXXXXOO4 1
+Entry Mode: Swiped
+Card Type: DISCOVER
+
+Response: APPROVED
+Approval Code: 819543
+Sub Total USD$ 25.23
+Tip: 3.78
+
+Total USD$ 29.01
+
+Thanks for supporting
+local business!
+
+THANK YOQU
+

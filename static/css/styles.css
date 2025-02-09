@@ -1,0 +1,446 @@
+/* ========================================================
+   Global Theme Variables & Transitions
+======================================================== */
+:root {
+    --transition-speed: 0.5s;
+    --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  
+    /* Light theme fallback values */
+    --light-bg: #f8f9fa;
+    --light-text: #212529;
+    --light-container-bg: #ffffff;
+    --light-border: #dee2e6;
+
+  
+    /* Dark theme colors */
+    --dark-bg: #0f0f0f;              /* Even darker background for the page */
+    --dark-text: #d0d0d0;            /* Warm light gray text for contrast */
+    --dark-container-bg: #1a1a1a;    /* Dark container background */
+    --dark-form-bg: #252525;         /* Dark form element background */
+    --dark-border: #555555;          /* Subtle border for contrast */
+  
+    /* Accent Colors */
+    --primary-color: #0d6efd;        /* Bright blue for primary actions */
+    --primary-hover: #0b5ed7;        /* Slightly darker blue for hover effects */
+    --secondary-color: #8c8c8c;      /* Lighter neutral for secondary elements */
+    --success-color: #28a745;        /* Green for success */
+    --danger-color: #dc3545;         /* Red for errors */
+    --link-color: #66b3ff;           /* Light blue for links */
+    --modal-bg: #181818;             /* Modal background */
+  }
+  
+  /* ========================================================
+     Global Base Styles & Transitions
+  ======================================================== */
+  body {
+    font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+    background-color: var(--light-bg);
+    color: var(--light-text);
+    transition: background-color var(--transition-speed) var(--transition-ease),
+                color var(--transition-speed) var(--transition-ease),
+                border-color var(--transition-speed) var(--transition-ease),
+                box-shadow var(--transition-speed) var(--transition-ease);
+  }
+  
+  /* ========================================================
+     Layout: Containers, Header, Main, Footer
+  ======================================================== */
+  .container {
+    max-width: 1200px;
+    padding: 1.5rem;
+    background-color: var(--light-container-bg);
+    border-radius: 0.5rem;
+    
+    margin-bottom: 1.5rem;;
+
+  }
+  
+  header {
+    background-color: var(--light-container-bg);
+    padding: 1rem 2rem;
+    text-align: center;
+    border-bottom: 1px solid var(--light-border);
+  }
+  body.dark-mode header {
+    background-color: var(--dark-container-bg);
+    border-bottom: 1px solid var(--dark-border);
+  }
+  
+  main {
+    padding: 2rem 1rem;
+  }
+  .text-muted {
+    --bs-text-opacity: 1;
+    color: rgb(131 135 140 / 75%) !important;
+}
+  footer {
+    background-color: var(--light-container-bg);
+    color: rgb(205, 206, 208) !important;
+    text-align: center;
+    padding: 1rem;
+    border-top: 1px solid var(--light-border);
+    margin-top: 2rem;
+  }
+  body.dark-mode footer {
+    background-color: var(--dark-container-bg);
+    border-top: 1px solid var(--dark-border);
+    color: var(--dark-text);
+  }
+  
+  /* ========================================================
+     Dark Mode Specific Overrides
+  ======================================================== */
+  body.dark-mode {
+    background-color: var(--dark-bg);
+    color: var(--dark-text);
+  }
+  
+  body.dark-mode a {
+    color: var(--link-color);
+  }
+  body.dark-mode a:hover {
+    color: var(--primary-color);
+  }
+  .card-body-1 {
+    flex: 1 1 auto;
+    padding: var(--bs-card-spacer-y) var(--bs-card-spacer-x);
+    color: var(--bs-card-color);
+  }
+  /* Containers, Cards, and Panels */
+  body.dark-mode .container,
+  body.dark-mode .card,
+  body.dark-mode .card-body {
+    background-color: var(--dark-container-bg);
+    color: var(--dark-text);
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    
+    margin-bottom: 1.5rem;
+  }
+  
+  /* ========================================================
+     Form Controls & File Input Styling
+  ======================================================== */
+  body.dark-mode .form-control {
+    background-color: var(--dark-form-bg);
+    color: var(--dark-text);
+    border: 1px solid var(--dark-border);
+    padding: 0.75rem;
+    border-radius: 0.25rem;
+  }
+  body.dark-mode .form-control:focus {
+    border-color: #777777;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+  }
+  
+  input[type="file"].form-control {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    line-height: 1.2;
+    color: #333333;
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+    border-radius: 0.25rem;
+    margin-bottom: 1rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  }
+  input[type="file"].form-control:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  }
+  body.dark-mode input[type="file"].form-control {
+    color: var(--dark-text);
+    background-color: var(--dark-form-bg);
+    border-color: #444444;
+  }
+  body.dark-mode input[type="file"].form-control:focus {
+    border-color: #777777;
+    box-shadow: 0 0 0 0.2rem rgba(119, 119, 119, 0.25);
+  }
+  
+  /* "Choose File" Button */
+  input[type="file"]::file-selector-button {
+    border: 1px solid #cccccc;
+    background-color: #f8f9fa;
+    padding: 0.3em 1em;
+    margin-right: 0.5em;
+    color: #333333;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+  input[type="file"]::file-selector-button:hover {
+    background-color: #e2e6ea;
+    border-color: #adb5bd;
+  }
+  body.dark-mode input[type="file"]::file-selector-button {
+    border: 1px solid #444444;
+    background-color: var(--dark-form-bg);
+    color: var(--dark-text);
+  }
+  body.dark-mode input[type="file"]::file-selector-button:hover {
+    background-color: #333333;
+    border-color: #666666;
+  }
+  
+  /* ========================================================
+     Drag and Drop Zone
+  ======================================================== */
+  #drop-zone {
+    border: 2px dashed #6c757d;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+  }
+  #drop-zone.bg-light {
+    background-color: #f8f9fa;
+    border-color: #007bff;
+  }
+  body.dark-mode #drop-zone {
+    border: 2px dashed var(--dark-border);
+    background-color: var(--dark-container-bg);
+    color: var(--dark-text);
+  }
+  body.dark-mode #drop-zone.bg-light {
+    background-color: #333333;
+    border-color: var(--primary-color);
+  }
+  
+  /* ========================================================
+     File List and Previews
+  ======================================================== */
+  #fileList ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+  body.dark-mode #fileList li,
+  #fileList li {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+    cursor: move;
+  }
+  #fileList li:hover {
+    transform: translateY(-2px);
+  }
+  body.dark-mode #fileList li {
+    background-color: var(--dark-form-bg);
+    border: 1px solid var(--dark-border);
+    color: var(--dark-text);
+  }
+  
+  /* Preview container styling */
+  #preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+  }
+  #preview div {
+    transition: transform 0.2s ease;
+    border-radius: 0.25rem;
+  }
+  #preview div:hover {
+    transform: scale(1.05);
+  }
+  
+  /* ========================================================
+     Progress Bars & Upload Log
+  ======================================================== */
+  .progress {
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+  }
+  .progress-bar {
+    background-color: #28a745;
+    font-weight: bold;
+    border-radius: 0.25rem;
+  }
+  body.dark-mode .progress {
+    background-color: #333333;
+  }
+  body.dark-mode .progress-bar {
+    background-color: var(--primary-color);
+    color: #ffffff;
+  }
+  #uploadLog {
+    font-size: 0.9rem;
+  }
+  
+  /* ========================================================
+     Chart Container
+  ======================================================== */
+  .chart-container {
+    position: relative;
+    height: 300px;
+    margin-bottom: 20px;
+    transition: background-color var(--transition-speed) var(--transition-ease);
+  }
+  
+  /* ========================================================
+     Responsive Adjustments
+  ======================================================== */
+  @media (max-width: 768px) {
+    .container {
+      padding: 1rem;
+    }
+    header, footer {
+      padding: 1rem;
+    }
+    main {
+      padding: 1rem;
+    }
+  }
+  /* Dark Mode Placeholder Styling */
+body.dark-mode ::placeholder {
+    color: #aaa;           /* Light gray color for placeholder text */
+    opacity: 1;            /* Ensure full opacity */
+  }
+  
+  /* Vendor prefixes for improved compatibility */
+  body.dark-mode input::-webkit-input-placeholder,
+  body.dark-mode textarea::-webkit-input-placeholder {
+    color: #aaa;
+    opacity: 1;
+  }
+  
+  body.dark-mode input:-ms-input-placeholder,
+  body.dark-mode textarea:-ms-input-placeholder {
+    color: #aaa;
+    opacity: 1;
+  }
+  
+  body.dark-mode input::-ms-input-placeholder,
+  body.dark-mode textarea::-ms-input-placeholder {
+    color: #aaa;
+    opacity: 1;
+  }
+  /* ========================================================
+   Dark Mode Table Styling
+======================================================== */
+
+/* Base table styling in dark mode */
+body.dark-mode table {
+    background-color: var(--dark-bg);
+    color: var(--dark-text);
+  }
+  
+  /* Table header styling */
+  body.dark-mode table thead {
+    background-color: var(--dark-container-bg);
+  }
+  body.dark-mode table thead th {
+    background-color: #1586f6;
+    color: var(--light-bg);
+    font-size: larger;
+    border-color: var(--dark-border);
+    padding-left: 15px;
+    padding-right: 5px;
+  }
+.table thead th {
+    background-color: #1586f6;
+    color: var(--light-text);
+    font-size: larger;
+    border-color: var(--dark-border);
+    padding-left: 15px;
+    padding-right: 5px;
+  }
+  /* Table body styling */
+  body.dark-mode table tbody {
+    background-color: var(--dark-bg);
+    
+  }
+  body.dark-mode table tbody td {
+    background-color: #212529;
+    color: var(--light-bg);
+    border-color: var(--dark-border);
+    padding-left: 15px;
+    padding-right: 5px;
+  }
+  .table tbody td {
+    
+    padding-left: 15px;
+    padding-right: 5px;
+  }
+  /* Striped rows: using a slightly different background for odd rows */
+  body.dark-mode table.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--dark-form-bg);
+  }
+  
+  /* Hover effect for table rows */
+  body.dark-mode table.table-hover tbody tr:hover {
+    background-color: var(--primary-color);
+    color: #fff;  /* Ensure text is legible on primary color */
+  }
+  
+  /* Optional: Adjust link colors inside tables */
+  body.dark-mode table a {
+    color: var(--link-color);
+  }
+  body.dark-mode table a:hover {
+    color: var(--primary-hover);
+  }
+  .table-responsive {
+    overflow-x: auto;
+    border-radius: 5px
+  }
+  /* Advanced Responsive Table Styling for Dark Mode */
+@media (max-width: 768px) {
+    /* Hide the table header */
+    #receiptsTable thead {
+      display: none;
+    }
+    /* Display each table row as a block */
+    #receiptsTable, #receiptsTable tbody, #receiptsTable tr, #receiptsTable td {
+      display: block;
+      width: 100%;
+    }
+    /* Style each row as a card */
+    #receiptsTable tr {
+      margin-bottom: 1rem;
+      border: 1px solid var(--dark-border);
+      border-radius: 0.5rem;
+      padding: 0.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      background-color: #c1c1c1
+    }
+    /* Style each cell and use data-label attribute for header information */
+    #receiptsTable td {
+      position: relative;
+      padding-left: 45%;
+      text-align: right;
+      border-top: none;
+      border-bottom: 1px solid var(--dark-border);
+      margin-bottom: 0.5rem;
+    }
+    #receiptsTable td::before {
+      content: attr(data-label);
+      position: absolute;
+      left: 1rem;
+      width: 40%;
+      padding-right: 1rem;
+      font-weight: bold;
+      text-align: left;
+      color: #4539cf;
+    }
+    /* Remove the last cell's bottom border */
+    #receiptsTable tr:last-child td {
+      border-bottom: 0;
+    }
+  }
+  
+  

@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center mb-4"><i class="bi bi-graph-up-arrow me-2"></i>Reports Dashboard</h2>
+  
+  <!-- Charts Row -->
+  <div class="row mb-4">
+    <!-- Pie Chart Card -->
+    <div class="col-md-6 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white d-flex align-items-center">
+          <h5 class="mb-0"><i class="bi bi-pie-chart-fill me-2"></i>Category Distribution</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="pieChart"></canvas>
+        </div>
+      </div>
+    </div>
+    <!-- Bar Chart Card -->
+    <div class="col-md-6 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-header bg-success text-white d-flex align-items-center">
+          <h5 class="mb-0"><i class="bi bi-bar-chart-fill me-2"></i>Monthly Expenses</h5>
+        </div>
+        <div class="card-body">
+          <canvas id="barChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Line Chart Card -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-warning text-dark d-flex align-items-center">
+      <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Expense Trends</h5>
+    </div>
+    <div class="card-body">
+      <canvas id="lineChart"></canvas>
+    </div>
+  </div>
+  
+  <!-- Transaction History Card -->
+  <div class="card shadow-sm">
+    <div class="card-header bg-info text-white d-flex align-items-center">
+      <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Transaction History</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table id="receiptsTable" class="table table-striped table-hover align-middle table-sm">
+          <thead class="table-light">
+            <tr>
+              <th scope="col" style="width: 6%;"><i class="bi bi-hash"></i>ID</th>
+              <th scope="col" style="width: 14%;"><i class="bi bi-receipt"></i> Bill No</th>
+              <th scope="col" style="width: 24%;"><i class="bi bi-shop"></i> Merchant</th>
+              <th scope="col" style="width: 12%;"><i class="bi bi-calendar-date"></i> Date</th>
+              <th scope="col" style="width: 12%;"><i class="bi bi-currency-dollar"></i>Amount</th>
+              <th scope="col" style="width: 32%;"><i class="bi bi-list-ul"></i> Items</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for receipt in receipts %}
+            <tr>
+                <td data-label="ID">{{ receipt.id }}</td>
+                <td data-label="Bill No">{{ receipt.bill_no or 'N/A' }}</td>
+                <td data-label="Merchant">{{ receipt.merchant }}</td>
+                <td data-label="Date">{{ receipt.date_time }}</td>
+                <td data-label="Total Amount">{{ receipt.total_amount }}</td>
+                <td data-label="Items">
+                {% if receipt.items %}
+                <ul class="mb-0" style="padding-left: 1rem; list-style: none;">
+                  {% for item in receipt.items %}
+                    <li><i class="bi bi-caret-right-fill"></i> {{ item.name }}: {{ item.amount }}</li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                  N/A
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Pie Chart
+var pieCtx = document.getElementById('pieChart').getContext('2d');
+new Chart(pieCtx, {
+    type: 'pie',
+    data: {
+        labels: {{ category_data.keys() | list | safe }},
+        datasets: [{
+            data: {{ category_data.values() | list | safe }},
+            backgroundColor: ['#FF6384','#36A2EB','#FFCE56','#4BC0C0','#9966FF'],
+            hoverOffset: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { position: 'top' },
+            tooltip: { enabled: true }
+        }
+    }
+});
+
+// Bar Chart
+var barCtx = document.getElementById('barChart').getContext('2d');
+new Chart(barCtx, {
+    type: 'bar',
+    data: {
+        labels: {{ monthly_data.keys() | list | safe }},
+        datasets: [{
+            label: 'Monthly Expenses',
+            data: {{ monthly_data.values() | list | safe }},
+            backgroundColor: '#36A2EB'
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+
+// Line Chart
+var lineCtx = document.getElementById('lineChart').getContext('2d');
+new Chart(lineCtx, {
+    type: 'line',
+    data: {
+        labels: {{ monthly_data.keys() | list | safe }},
+        datasets: [{
+            label: 'Expense Trends',
+            data: {{ monthly_data.values() | list | safe }},
+            borderColor: '#FF6384',
+            fill: false
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: true },
+            tooltip: { enabled: true }
+        },
+        scales: {
+            y: { beginAtZero: true }
+        }
+    }
+});
+</script>
+
+<!-- Bootstrap Icons and Bootstrap JS Bundle -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

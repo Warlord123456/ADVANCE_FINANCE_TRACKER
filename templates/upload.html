@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  /* Global Transition Variables */
+  :root {
+    --transition-speed: 0.5s;
+    --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Ensure smooth scrolling for log and other scrollable containers */
+  html, #uploadLog {
+    scroll-behavior: smooth;
+  }
+  
+  /* Enhanced Progress Bar with gradient and subtle pulse effect */
+  .progress-bar {
+    transition: width var(--transition-speed) var(--transition-ease);
+    background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+  @keyframes progressPulse {
+    0% { opacity: 0.8; }
+    50% { opacity: 1; }
+    100% { opacity: 0.8; }
+  }
+  .progress-bar.uploading {
+    animation: progressPulse 1s infinite;
+  }
+  
+  /* Additional spacing for buttons and list items */
+  #fileList li {
+    margin-bottom: 0.5rem;
+  }
+  #uploadLog {
+    padding: 0.5rem;
+    font-size: 0.9rem;
+  }
+</style>
+
+<div class="container mt-4">
+  <h2 class="mb-3">Upload Your Receipts</h2>
+  <p class="text-muted">Allowed file types: Images, PDF. Maximum size per file: 16 MB.</p>
+  
+  <!-- Auto-upload toggle and total file size display -->
+  <div class="mb-3 d-flex align-items-center">
+    <input type="checkbox" id="autoUploadToggle" class="form-check-input me-2">
+    <label for="autoUploadToggle" class="form-check-label me-3">Auto-upload after selection</label>
+    <span id="totalSize" class="ms-3 text-secondary"></span>
+  </div>
+  
+  <!-- Sorting Buttons -->
+  <div class="mb-3">
+    <button type="button" id="sortName" class="btn btn-outline-primary btn-sm me-2">Sort by Name</button>
+    <button type="button" id="sortSize" class="btn btn-outline-primary btn-sm">Sort by Size</button>
+  </div>
+  
+  <!-- File Count Display -->
+  <p id="fileCount" class="mb-2 fw-bold">No files selected</p>
+  
+  <div class="card mb-3 shadow-sm">
+    <div class="card-body">
+      <form id="uploadForm" enctype="multipart/form-data">
+        <!-- Hidden File Input -->
+        <div class="mb-3">
+          <input type="file" name="receipt_files" id="receipt_files" class="form-control" multiple accept="image/*,application/pdf">
+        </div>
+        <!-- Drag and Drop Zone -->
+        <div id="drop-zone" class="p-4 text-center mb-3">
+          <p class="mb-0">Drag and drop files here or click to select</p>
+        </div>
+        <!-- File List with Details and Individual Progress Bars -->
+        <div id="fileList" class="mb-3"></div>
+        <!-- Live Preview Thumbnails -->
+        <div id="preview" class="mb-3 d-flex flex-wrap justify-content-center"></div>
+        <!-- Clear All Button -->
+        <button type="button" id="clearFiles" class="btn btn-secondary mb-3">Clear All Files</button>
+        <!-- Global Upload and Cancel Buttons -->
+        <div class="d-flex mb-3">
+          <button type="button" id="uploadAllBtn" class="btn btn-success me-2">Upload All</button>
+          <button type="button" id="cancelAllBtn" class="btn btn-danger" style="display: none;">Cancel All Uploads</button>
+        </div>
+        <!-- Overall Progress Bar -->
+        <div class="progress mb-3" style="height: 25px; display: none;">
+          <div id="overallProgressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuemin="0" aria-valuemax="100">0%</div>
+        </div>
+        <!-- Upload Log -->
+        <div id="uploadLog" class="border p-2" style="max-height: 200px; overflow-y: auto; display: none;"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for File Preview -->
+<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="previewModalLabel">File Preview</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Preview content will be inserted here -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Include Bootstrap JS and Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-pap+Q6xEoxl6ILt5z+hwimq1guzCDrJr8klAQJE0Rtn5VErVX3Wb2wUcZmd62U0UXeA2eBNSFh+cp7cT2V0E2g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('receipt_files');
+  const preview = document.getElementById('preview');
+  const fileListDiv = document.getElementById('fileList');
+  const fileCountDisplay = document.getElementById('fileCount');
+  const totalSizeDisplay = document.getElementById('totalSize');
+  const uploadForm = document.getElementById('uploadForm');
+  const clearFilesBtn = document.getElementById('clearFiles');
+  const uploadAllBtn = document.getElementById('uploadAllBtn');
+  const cancelAllBtn = document.getElementById('cancelAllBtn');
+  const overallProgressBar = document.getElementById('overallProgressBar');
+  const progressContainer = overallProgressBar.parentElement;
+  const uploadLog = document.getElementById('uploadLog');
+  const autoUploadToggle = document.getElementById('autoUploadToggle');
+  const previewModal = new bootstrap.Modal(document.getElementById('previewModal'), {});
+  const modalBody = document.getElementById('modalBody');
+
+  // File validation configuration.
+  const allowedTypes = ['image/', 'application/pdf'];
+  const maxFileSize = 16 * 1024 * 1024; // 16 MB
+
+  // Array to hold selected files.
+  let selectedFiles = [];
+  // Object to hold individual file XHR objects, keyed by index.
+  let fileXHRs = {};
+
+  // Update file count and total size display.
+  function updateFileStats() {
+    fileCountDisplay.textContent = selectedFiles.length + " file(s) selected";
+    const totalSize = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+    totalSizeDisplay.textContent = "Total size: " + (totalSize / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  // Trigger file input on drop-zone click.
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  // Drag-and-drop event handlers.
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.add('bg-light');
+  });
+  dropZone.addEventListener('dragleave', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('bg-light');
+  });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('bg-light');
+    addFiles(e.dataTransfer.files);
+  });
+
+  // File input change event.
+  fileInput.addEventListener('change', e => addFiles(e.target.files));
+
+  // Add files to selection with validation.
+  function addFiles(files) {
+    for (let file of files) {
+      // Validate type.
+      if (!allowedTypes.some(type => file.type.startsWith(type))) {
+        alert(`File type not allowed: ${file.name}`);
+        continue;
+      }
+      // Validate size.
+      if (file.size > maxFileSize) {
+        alert(`File too large (max 16MB): ${file.name}`);
+        continue;
+      }
+      // Avoid duplicates.
+      if (!selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+        selectedFiles.push(file);
+      }
+    }
+    updateFileList();
+    displayPreviews();
+    updateFileStats();
+    if(autoUploadToggle.checked) {
+      uploadAllFiles();
+    }
+  }
+
+  // Update file list with draggable items, progress bars, and remove buttons.
+  function updateFileList() {
+    fileListDiv.innerHTML = "";
+    if (selectedFiles.length > 0) {
+      const ul = document.createElement('ul');
+      ul.classList.add('list-group');
+      selectedFiles.forEach((file, index) => {
+        const li = document.createElement('li');
+        li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
+        li.dataset.index = index;
+        li.innerHTML = `<span>${file.name} (${Math.round(file.size / 1024)} KB)</span>`;
+        
+        // Create progress container.
+        const progressDiv = document.createElement('div');
+        progressDiv.classList.add('progress');
+        progressDiv.style.width = "100px";
+        progressDiv.style.marginRight = "10px";
+        progressDiv.style.display = "none";
+        
+        const progBar = document.createElement('div');
+        progBar.classList.add('progress-bar');
+        progBar.style.width = "0%";
+        progBar.textContent = "0%";
+        progressDiv.appendChild(progBar);
+        li.appendChild(progressDiv);
+        
+        // Remove button.
+        const removeBtn = document.createElement('button');
+        removeBtn.classList.add('btn', 'btn-sm', 'btn-danger');
+        removeBtn.textContent = "Remove";
+        removeBtn.addEventListener('click', () => {
+          if (fileXHRs[index]) {
+            fileXHRs[index].abort();
+            delete fileXHRs[index];
+          }
+          selectedFiles.splice(index, 1);
+          updateFileList();
+          displayPreviews();
+          updateFileStats();
+        });
+        li.appendChild(removeBtn);
+        
+        // Make item draggable for reordering.
+        li.setAttribute('draggable', 'true');
+        li.addEventListener('dragstart', dragStart);
+        li.addEventListener('dragover', dragOver);
+        li.addEventListener('drop', dropItem);
+        li.addEventListener('dragend', dragEnd);
+        
+        ul.appendChild(li);
+      });
+      fileListDiv.appendChild(ul);
+    }
+  }
+
+  let dragSrcIndex = null;
+  function dragStart(e) {
+    dragSrcIndex = +this.dataset.index;
+    e.dataTransfer.effectAllowed = 'move';
+    this.style.opacity = '0.5';
+  }
+  function dragOver(e) {
+    e.preventDefault();
+    return false;
+  }
+  function dropItem(e) {
+    e.stopPropagation();
+    const destIndex = +this.dataset.index;
+    if (dragSrcIndex !== null && dragSrcIndex !== destIndex) {
+      [selectedFiles[dragSrcIndex], selectedFiles[destIndex]] = [selectedFiles[destIndex], selectedFiles[dragSrcIndex]];
+      updateFileList();
+      displayPreviews();
+    }
+    return false;
+  }
+  function dragEnd(e) {
+    this.style.opacity = '1';
+    dragSrcIndex = null;
+  }
+
+  // Display live previews: thumbnails for images; icons for PDFs.
+  function displayPreviews() {
+    preview.innerHTML = "";
+    selectedFiles.forEach(file => {
+      const container = document.createElement('div');
+      container.classList.add('m-2', 'text-center');
+      container.style.width = "120px";
+      container.style.cursor = "pointer";
+      
+      if (file.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.style.height = "100px";
+        img.style.width = "100px";
+        img.style.objectFit = "cover";
+        img.classList.add('img-thumbnail');
+        img.addEventListener('click', () => {
+          modalBody.innerHTML = "";
+          const modalImg = document.createElement('img');
+          modalImg.src = img.src;
+          modalImg.style.width = "100%";
+          modalBody.appendChild(modalImg);
+          previewModal.show();
+        });
+        container.appendChild(img);
+      } else if (file.type === 'application/pdf') {
+        const icon = document.createElement('i');
+        icon.className = "fas fa-file-pdf fa-3x text-danger";
+        container.appendChild(icon);
+      } else {
+        const icon = document.createElement('i');
+        icon.className = "fas fa-file fa-3x";
+        container.appendChild(icon);
+      }
+      const nameEl = document.createElement('p');
+      nameEl.textContent = file.name;
+      nameEl.style.fontSize = "0.8rem";
+      container.appendChild(nameEl);
+      preview.appendChild(container);
+    });
+  }
+
+  // Clear all selected files.
+  clearFilesBtn.addEventListener('click', () => {
+    selectedFiles = [];
+    fileInput.value = "";
+    updateFileList();
+    preview.innerHTML = "";
+    updateFileStats();
+  });
+
+  // Sorting functions.
+  document.getElementById('sortName').addEventListener('click', () => {
+    selectedFiles.sort((a, b) => a.name.localeCompare(b.name));
+    updateFileList();
+    displayPreviews();
+  });
+  document.getElementById('sortSize').addEventListener('click', () => {
+    selectedFiles.sort((a, b) => a.size - b.size);
+    updateFileList();
+    displayPreviews();
+  });
+
+  // Upload individual file with progress update.
+  function uploadFile(file, index) {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('receipt_files', file);
+      const xhr = new XMLHttpRequest();
+      fileXHRs[index] = xhr;
+      xhr.open("POST", "{{ url_for('upload') }}", true);
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          const li = fileListDiv.querySelector(`li[data-index="${index}"]`);
+          if (li) {
+            const progBar = li.querySelector('.progress-bar');
+            if (progBar) {
+              progBar.style.width = percent + "%";
+              progBar.textContent = percent + "%";
+              li.querySelector('.progress').style.display = "block";
+              progBar.classList.add('uploading');
+            }
+          }
+          updateOverallProgress();
+        }
+      };
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          logMessage(file.name + " uploaded successfully.", "success");
+          resolve();
+        } else {
+          logMessage(file.name + " failed to upload.", "danger");
+          reject();
+        }
+      };
+      xhr.onerror = function() {
+        logMessage(file.name + " encountered an error during upload.", "danger");
+        reject();
+      };
+      xhr.send(formData);
+    });
+  }
+
+  // Update overall progress based on individual file progress.
+  function updateOverallProgress() {
+    let totalPercent = 0;
+    let count = 0;
+    fileListDiv.querySelectorAll('li').forEach(li => {
+      const progBar = li.querySelector('.progress-bar');
+      if (progBar) {
+        totalPercent += parseInt(progBar.textContent);
+        count++;
+      }
+    });
+    const overall = count > 0 ? Math.round(totalPercent / count) : 0;
+    overallProgressBar.style.width = overall + "%";
+    overallProgressBar.textContent = overall + "%";
+  }
+
+  // Log messages to the upload log.
+  function logMessage(message, type) {
+    const div = document.createElement('div');
+    div.classList.add('alert', 'alert-' + type, 'py-1', 'my-1');
+    div.textContent = message;
+    uploadLog.appendChild(div);
+    uploadLog.style.display = "block";
+    // Auto-scroll to the bottom.
+    uploadLog.scrollTop = uploadLog.scrollHeight;
+  }
+
+  // Upload all files individually.
+  function uploadAllFiles() {
+    overallProgressBar.style.width = "0%";
+    overallProgressBar.textContent = "0%";
+    progressContainer.style.display = "block";
+    cancelAllBtn.style.display = "inline-block";
+    const uploadPromises = selectedFiles.map((file, index) => uploadFile(file, index));
+    Promise.allSettled(uploadPromises).then(() => {
+      logMessage("All uploads completed.", "info");
+      cancelAllBtn.style.display = "none";
+      document.querySelectorAll('.progress-bar.uploading').forEach(el => el.classList.remove('uploading'));
+    });
+  }
+
+  // Global upload button event.
+  uploadAllBtn.addEventListener('click', () => {
+    if (selectedFiles.length === 0) {
+      alert("Please select at least one file.");
+      return;
+    }
+    uploadAllFiles();
+  });
+
+  // Global cancel upload event.
+  cancelAllBtn.addEventListener('click', () => {
+    Object.keys(fileXHRs).forEach(key => fileXHRs[key].abort());
+    logMessage("All uploads canceled.", "warning");
+    cancelAllBtn.style.display = "none";
+    progressContainer.style.display = "none";
+  });
+});
+</script>
+{% endblock %}
