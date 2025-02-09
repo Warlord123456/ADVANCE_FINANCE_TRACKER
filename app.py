@@ -17,7 +17,7 @@ from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pdf2image
-
+pytesseract.pytesseract.tesseract_cmd = "/opt/render/project/src/tesseract/tesseract"
 # Import the database and the enhanced models.
 from extensions import db
 from models import Receipt, ReceiptItem
