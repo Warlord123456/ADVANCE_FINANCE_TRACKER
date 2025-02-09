@@ -36,9 +36,67 @@ else:
     else:
         print("Tesseract not found. Make sure it is installed.")
 
-# Import the database and models.
+# Import the database and the enhanced models.
 from extensions import db
 from models import Receipt, ReceiptItem
+
+#########################################
+#         Regex Helper Functions        #
+#########################################
+def regex_extract(text: str, pattern: str, group: int = 1, flags: int = re.IGNORECASE) -> Optional[str]:
+    """
+    Extract the first match from the text using the given regex pattern.
+    
+    :param text: The text to search.
+    :param pattern: The regex pattern.
+    :param group: The capture group to return (default is 1).
+    :param flags: Regex flags (default is re.IGNORECASE).
+    :return: The matched group if found, else None.
+    """
+    match = re.search(pattern, text, flags=flags)
+    if match:
+        return match.group(group)
+    return None
+
+
+def multi_regex_extract(text: str, patterns: List[str], group: int = 1, flags: int = re.IGNORECASE) -> Optional[str]:
+    """
+    Try multiple regex patterns on the text and return the first successful match.
+    
+    :param text: The text to search.
+    :param patterns: A list of regex patterns.
+    :param group: The capture group to return.
+    :param flags: Regex flags.
+    :return: The first matching result or None.
+    """
+    for pattern in patterns:
+        result = regex_extract(text, pattern, group=group, flags=flags)
+        if result:
+            return result
+    return None
+
+
+def extract_items(lines: List[str]) -> List[Dict[str, str]]:
+    """
+    Extract individual receipt items from the OCR lines.
+    
+    :param lines: List of text lines from the OCR.
+    :return: A list of dictionaries, each with an 'item' and an 'amount' key.
+    """
+    items = []
+    # Pattern for an item name and its price.
+    item_pattern = r'^(?P<item>.+?)\s+(?P<price>[\$€£]?\s*\d+(?:[,\s]\d+)*(?:\.\d{1,2})?)\s*$'
+    for line in lines:
+        # Skip lines that likely contain totals or other keywords.
+        if re.search(r'\b(total|amount|tax|discount|invoice|bill)\b', line, re.IGNORECASE):
+            continue
+        match = re.match(item_pattern, line)
+        if match:
+            item_name = match.group('item').strip(' -')
+            price = match.group('price').strip()
+            items.append({'name': item_name, 'amount': price})
+    return items
+
 
 #########################################
 #        Helper Conversion Functions    #
@@ -88,7 +146,7 @@ def create_app() -> Flask:
         SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key')
         SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URI', 'sqlite:///receipts.db')
         UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
-        MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
+        MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB limit
         ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
         POPPLER_PATH = os.getenv('POPPLER_PATH') or os.path.abspath(
             os.path.join(os.getcwd(), "poppler-24.08.0", "Library", "bin")
@@ -144,13 +202,13 @@ def create_app() -> Flask:
             app.logger.exception(f"OCR error processing {file_path}: {e}")
             return "", ""
 
-    # Alias for clarity
+    # Alias for clarity.
     perform_ocr = ocr_receipt
 
     def extract_receipt_details(ocr_text: str) -> Dict[str, Any]:
         """
         Extract receipt details such as merchant name, bill number, date, items,
-        total amount, tax, discount, and location from the OCR text.
+        total amount, tax, discount, and location from the OCR text using regex functions.
         """
         details: Dict[str, Any] = {
             'bill_no': None,
@@ -163,87 +221,76 @@ def create_app() -> Flask:
             'location': None
         }
 
+        # Split the OCR text into lines for easier processing.
         lines = [line.strip() for line in ocr_text.splitlines() if line.strip()]
 
-        # Attempt to detect merchant name (preferring lines with alphabetic characters)
+        # --- Merchant Extraction ---
+        # Try to find a merchant name using a simple alphabetic pattern.
+        merchant = None
         for line in lines:
             if re.match(r'^[A-Za-z\s&\-.]+$', line):
-                details['merchant'] = line
+                merchant = line
                 break
-        if details['merchant'] is None and lines:
-            details['merchant'] = lines[0]
+        if not merchant and lines:
+            merchant = lines[0]
+        details['merchant'] = merchant
 
-        # Extract bill/invoice number using common patterns.
+        # --- Bill/Invoice Number Extraction ---
         bill_no_patterns = [
-            r'\b(?:Bill|Invoice)\s*(?:No\.?|#)[:\s]*([\w-]+)',
-            r'\b(?:BILL|INVOICE)\s*(?:NO\.?|#)[:\s]*([\w-]+)'
+            r'\b(?:Bill|Invoice)\s*(?:No\.?|#)[:\s]*([\w-]+)'
         ]
+        bill_no = None
         for line in lines:
-            for pattern in bill_no_patterns:
-                match = re.search(pattern, line, re.IGNORECASE)
-                if match:
-                    details['bill_no'] = match.group(1)
-                    break
-            if details['bill_no']:
+            bill_no = multi_regex_extract(line, bill_no_patterns, group=1)
+            if bill_no:
                 break
+        details['bill_no'] = bill_no
 
-        # Extract date/time from the receipt.
+        # --- Date/Time Extraction ---
         date_patterns = [
             r'\b(?P<day>\d{1,2})[/-](?P<month>\d{1,2})[/-](?P<year>\d{2,4})\b',
             r'\b(?P<year>\d{4})[/-](?P<month>\d{1,2})[/-](?P<day>\d{1,2})\b'
         ]
+        date_time = None
         for line in lines:
-            for pattern in date_patterns:
-                match = re.search(pattern, line)
-                if match:
-                    details['date_time'] = match.group(0)
-                    break
-            if details['date_time']:
+            # Use group 0 to capture the entire matched date string.
+            date_time = multi_regex_extract(line, date_patterns, group=0)
+            if date_time:
                 break
+        details['date_time'] = date_time
 
-        # Extract total amount.
+        # --- Total Amount Extraction ---
         total_patterns = [
             r'\b(?:TOTAL|Grand Total|AMOUNT|Amount)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)',
             r'([\$€£]\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2}))\s*(?:TOTAL|Grand Total)?'
         ]
+        total_amount = None
         for line in lines:
-            for pattern in total_patterns:
-                match = re.search(pattern, line, re.IGNORECASE)
-                if match:
-                    details['total_amount'] = match.group(1).strip()
-                    break
-            if details['total_amount']:
+            total_amount = multi_regex_extract(line, total_patterns, group=1)
+            if total_amount:
                 break
+        details['total_amount'] = total_amount
 
-        # Extract individual items and their prices.
-        item_pattern = r'^(?P<item>.+?)\s+(?P<price>[\$€£]?\s*\d+(?:[,\s]\d+)*(?:\.\d{1,2})?)\s*$'
-        for line in lines:
-            if re.search(r'\b(total|amount|tax|discount|invoice|bill)\b', line, re.IGNORECASE):
-                continue
-            match = re.match(item_pattern, line)
-            if match:
-                item_name = match.group('item').strip(' -')
-                price = match.group('price').strip()
-                details['items'].append({'name': item_name, 'amount': price})
-                app.logger.debug(f"Extracted item: '{item_name}' with price: '{price}'")
-            else:
-                app.logger.debug(f"Item extraction: No match for line: '{line}'")
-
-        # Extract tax amount.
+        # --- Tax Extraction ---
         tax_pattern = r'\b(?:Tax|VAT)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)'
+        tax = None
         for line in lines:
-            match = re.search(tax_pattern, line, re.IGNORECASE)
-            if match:
-                details['tax'] = match.group(1).strip()
+            tax = regex_extract(line, tax_pattern, group=1)
+            if tax:
                 break
+        details['tax'] = tax
 
-        # Extract discount amount.
+        # --- Discount Extraction ---
         discount_pattern = r'\b(?:Discount|Disc\.?)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)'
+        discount = None
         for line in lines:
-            match = re.search(discount_pattern, line, re.IGNORECASE)
-            if match:
-                details['discount'] = match.group(1).strip()
+            discount = regex_extract(line, discount_pattern, group=1)
+            if discount:
                 break
+        details['discount'] = discount
+
+        # --- Items Extraction ---
+        details['items'] = extract_items(lines)
 
         return details
 
@@ -260,9 +307,9 @@ def create_app() -> Flask:
         }
         if merchant:
             merchant_lower = merchant.lower()
-            for category, keywords in categories.items():
+            for cat, keywords in categories.items():
                 if any(keyword in merchant_lower for keyword in keywords):
-                    return category
+                    return cat
         return 'others'
 
     def process_pdf(file_path: str) -> str:
