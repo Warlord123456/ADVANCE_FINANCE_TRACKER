@@ -26,7 +26,7 @@ from models import Receipt, ReceiptItem
 #     Configure Tesseract Executable    #
 #########################################
 import sys
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
 # Determine the absolute path to the current directory.
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
