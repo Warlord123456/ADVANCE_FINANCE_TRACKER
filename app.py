@@ -19,23 +19,21 @@ from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pdf2image
-pytesseract.pytesseract.tesseract_cmd = "/opt/render/project/src/tesseract/tesseract"
-# Import the database and the enhanced models.
-from extensions import db
-from models import Receipt, ReceiptItem
 
-#########################################
-#     Configure Tesseract Executable    #
-#########################################
+# Initially set a default Tesseract command then try to locate it dynamically.
+
 import sys
 
 tesseract_path = shutil.which("tesseract")
-
 if tesseract_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
     print(f"Tesseract found at: {tesseract_path}")
 else:
     print("Tesseract not found. Make sure it is installed.")
+
+# Import the database and the enhanced models.
+from extensions import db
+from models import Receipt, ReceiptItem
 
 #########################################
 #        Helper Conversion Functions    #
@@ -48,6 +46,7 @@ def parse_date(date_str: Optional[str]) -> datetime:
             return datetime.strptime(date_str, fmt)
         except ValueError:
             continue
+    # If none of the formats match, return the current time.
     return datetime.utcnow()
 
 def parse_decimal(value: Optional[str]) -> Decimal:
@@ -95,6 +94,7 @@ def create_app() -> Flask:
         try:
             with Image.open(file_path) as img:
                 gray_img = ImageOps.grayscale(img)
+                # Apply a simple threshold
                 threshold_img = gray_img.point(lambda x: 0 if x < 128 else 255, mode='1')
                 preprocessed_path = f"{os.path.splitext(file_path)[0]}_preprocessed.jpg"
                 threshold_img.save(preprocessed_path)
@@ -135,6 +135,7 @@ def create_app() -> Flask:
 
         lines = [line.strip() for line in ocr_text.splitlines() if line.strip()]
 
+        # Attempt to find a merchant name (if the entire line is alphabetic)
         for line in lines:
             if re.match(r'^[A-Za-z\s&\-.]+$', line):
                 details['merchant'] = line
@@ -142,6 +143,7 @@ def create_app() -> Flask:
         if details['merchant'] is None and lines:
             details['merchant'] = lines[0]
 
+        # Extract bill/invoice number
         bill_no_patterns = [
             r'\b(?:Bill|Invoice)\s*(?:No\.?|#)[:\s]*([\w-]+)',
             r'\b(?:BILL|INVOICE)\s*(?:NO\.?|#)[:\s]*([\w-]+)'
@@ -155,6 +157,7 @@ def create_app() -> Flask:
             if details['bill_no']:
                 break
 
+        # Extract date/time from the receipt
         date_patterns = [
             r'\b(?P<day>\d{1,2})[/-](?P<month>\d{1,2})[/-](?P<year>\d{2,4})\b',
             r'\b(?P<year>\d{4})[/-](?P<month>\d{1,2})[/-](?P<day>\d{1,2})\b'
@@ -168,6 +171,7 @@ def create_app() -> Flask:
             if details['date_time']:
                 break
 
+        # Extract total amount
         total_patterns = [
             r'\b(?:TOTAL|Grand Total|AMOUNT|Amount)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)',
             r'([\$€£]\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2}))\s*(?:TOTAL|Grand Total)?'
@@ -181,8 +185,10 @@ def create_app() -> Flask:
             if details['total_amount']:
                 break
 
+        # Extract individual items and their prices
         item_pattern = r'^(?P<item>.+?)\s+(?P<price>[\$€£]?\s*\d+(?:[,\s]\d+)*(?:\.\d{1,2})?)\s*$'
         for line in lines:
+            # Skip lines that likely contain totals or other keywords
             if re.search(r'\b(total|amount|tax|discount|invoice|bill)\b', line, re.IGNORECASE):
                 continue
             match = re.match(item_pattern, line)
@@ -194,6 +200,7 @@ def create_app() -> Flask:
             else:
                 app.logger.debug(f"Item extraction: No match for line: '{line}'")
 
+        # Extract tax amount
         tax_pattern = r'\b(?:Tax|VAT)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)'
         for line in lines:
             match = re.search(tax_pattern, line, re.IGNORECASE)
@@ -201,6 +208,7 @@ def create_app() -> Flask:
                 details['tax'] = match.group(1).strip()
                 break
 
+        # Extract discount amount
         discount_pattern = r'\b(?:Discount|Disc\.?)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)'
         for line in lines:
             match = re.search(discount_pattern, line, re.IGNORECASE)
@@ -370,16 +378,16 @@ def create_app() -> Flask:
     def edit_receipt(receipt_id: int):
         receipt = Receipt.query.get_or_404(receipt_id)
         if request.method == 'POST':
-            receipt.update_from_dict({
-                'merchant': request.form.get('merchant'),
-                'date_time': parse_date(request.form.get('date_time')),
-                'total_amount': parse_decimal(request.form.get('total_amount')),
-                'tax': parse_decimal(request.form.get('tax')),
-                'discount': parse_decimal(request.form.get('discount')),
-                'category': request.form.get('category'),
-                'ocr_text': request.form.get('ocr_text'),
-                'location': request.form.get('location')
-            })
+            # Instead of using update_from_dict (which may not be defined),
+            # update each attribute manually.
+            receipt.merchant = request.form.get('merchant')
+            receipt.date_time = parse_date(request.form.get('date_time'))
+            receipt.total_amount = parse_decimal(request.form.get('total_amount'))
+            receipt.tax = parse_decimal(request.form.get('tax'))
+            receipt.discount = parse_decimal(request.form.get('discount'))
+            receipt.category = request.form.get('category')
+            receipt.ocr_text = request.form.get('ocr_text')
+            receipt.location = request.form.get('location')
             try:
                 db.session.commit()
                 flash('Receipt updated successfully.', 'success')
