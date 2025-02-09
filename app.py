@@ -1,10 +1,11 @@
 import os
 import re
 import io
+import sys
 import tempfile
 import logging
 import shutil
-
+import platform
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Tuple, Dict, Any, List, Optional
@@ -17,21 +18,25 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 import pdf2image
 
-# Initially set a default Tesseract command then try to locate it dynamically.
-
-import sys
-
-tesseract_path = shutil.which("tesseract")
-if tesseract_path:
-    pytesseract.pytesseract.tesseract_cmd = tesseract_path
-    print(f"Tesseract found at: {tesseract_path}")
+# Configure Tesseract executable path based on the operating system.
+if platform.system() == "Windows":
+    tesseract_executable = os.path.join(os.getcwd(), "tesseract", "tesseract.exe")
+    if os.path.exists(tesseract_executable):
+        pytesseract.pytesseract.tesseract_cmd = tesseract_executable
+        print(f"Using Tesseract from: {tesseract_executable}")
+    else:
+        print("Tesseract executable not found in the local 'tesseract' folder.")
 else:
-    print("Tesseract not found. Make sure it is installed.")
+    tesseract_path = shutil.which("tesseract")
+    if tesseract_path:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+        print(f"Tesseract found at: {tesseract_path}")
+    else:
+        print("Tesseract not found. Make sure it is installed.")
 
-# Import the database and the enhanced models.
+# Import the database and models.
 from extensions import db
 from models import Receipt, ReceiptItem
 
@@ -39,6 +44,10 @@ from models import Receipt, ReceiptItem
 #        Helper Conversion Functions    #
 #########################################
 def parse_date(date_str: Optional[str]) -> datetime:
+    """
+    Parse a date string using multiple formats. If no valid date is found,
+    returns the current UTC time.
+    """
     if not date_str:
         return datetime.utcnow()
     for fmt in ('%Y-%m-%d', '%d-%m-%Y', '%m-%d-%Y'):
@@ -46,10 +55,13 @@ def parse_date(date_str: Optional[str]) -> datetime:
             return datetime.strptime(date_str, fmt)
         except ValueError:
             continue
-    # If none of the formats match, return the current time.
     return datetime.utcnow()
 
+
 def parse_decimal(value: Optional[str]) -> Decimal:
+    """
+    Clean a string and convert it to a Decimal. If conversion fails, returns 0.00.
+    """
     if not value:
         return Decimal('0.00')
     cleaned = re.sub(r'[^\d.,-]', '', value)
@@ -62,39 +74,49 @@ def parse_decimal(value: Optional[str]) -> Decimal:
     except (InvalidOperation, ValueError):
         return Decimal('0.00')
 
+
 #########################################
 #            Application Setup          #
 #########################################
 def create_app() -> Flask:
+    """
+    Create and configure the Flask application.
+    """
     app = Flask(__name__)
 
     class Config:
         SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key')
         SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URI', 'sqlite:///receipts.db')
         UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
-        MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB limit
+        MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB
         ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
         POPPLER_PATH = os.getenv('POPPLER_PATH') or os.path.abspath(
             os.path.join(os.getcwd(), "poppler-24.08.0", "Library", "bin")
         )
 
     app.config.from_object(Config)
-
     db.init_app(app)
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     app.logger.setLevel(logging.DEBUG)
 
     def allowed_file(filename: str) -> bool:
+        """
+        Check if the file has one of the allowed extensions.
+        """
         return (
             '.' in filename and
             filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
         )
 
     def preprocess_image(file_path: str) -> str:
+        """
+        Preprocess the image by converting it to grayscale and applying a threshold.
+        Returns the path to the preprocessed image.
+        """
         try:
             with Image.open(file_path) as img:
                 gray_img = ImageOps.grayscale(img)
-                # Apply a simple threshold
+                # Apply a simple binary threshold
                 threshold_img = gray_img.point(lambda x: 0 if x < 128 else 255, mode='1')
                 preprocessed_path = f"{os.path.splitext(file_path)[0]}_preprocessed.jpg"
                 threshold_img.save(preprocessed_path)
@@ -105,6 +127,10 @@ def create_app() -> Flask:
             raise
 
     def ocr_receipt(file_path: str) -> Tuple[str, str]:
+        """
+        Perform OCR on an image file after preprocessing. Save the OCR output
+        to a text file and return both the OCR text and the text file path.
+        """
         try:
             preprocessed_path = preprocess_image(file_path)
             with Image.open(preprocessed_path) as processed_img:
@@ -122,6 +148,10 @@ def create_app() -> Flask:
     perform_ocr = ocr_receipt
 
     def extract_receipt_details(ocr_text: str) -> Dict[str, Any]:
+        """
+        Extract receipt details such as merchant name, bill number, date, items,
+        total amount, tax, discount, and location from the OCR text.
+        """
         details: Dict[str, Any] = {
             'bill_no': None,
             'merchant': None,
@@ -135,7 +165,7 @@ def create_app() -> Flask:
 
         lines = [line.strip() for line in ocr_text.splitlines() if line.strip()]
 
-        # Attempt to find a merchant name (if the entire line is alphabetic)
+        # Attempt to detect merchant name (preferring lines with alphabetic characters)
         for line in lines:
             if re.match(r'^[A-Za-z\s&\-.]+$', line):
                 details['merchant'] = line
@@ -143,7 +173,7 @@ def create_app() -> Flask:
         if details['merchant'] is None and lines:
             details['merchant'] = lines[0]
 
-        # Extract bill/invoice number
+        # Extract bill/invoice number using common patterns.
         bill_no_patterns = [
             r'\b(?:Bill|Invoice)\s*(?:No\.?|#)[:\s]*([\w-]+)',
             r'\b(?:BILL|INVOICE)\s*(?:NO\.?|#)[:\s]*([\w-]+)'
@@ -157,7 +187,7 @@ def create_app() -> Flask:
             if details['bill_no']:
                 break
 
-        # Extract date/time from the receipt
+        # Extract date/time from the receipt.
         date_patterns = [
             r'\b(?P<day>\d{1,2})[/-](?P<month>\d{1,2})[/-](?P<year>\d{2,4})\b',
             r'\b(?P<year>\d{4})[/-](?P<month>\d{1,2})[/-](?P<day>\d{1,2})\b'
@@ -171,7 +201,7 @@ def create_app() -> Flask:
             if details['date_time']:
                 break
 
-        # Extract total amount
+        # Extract total amount.
         total_patterns = [
             r'\b(?:TOTAL|Grand Total|AMOUNT|Amount)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)',
             r'([\$€£]\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2}))\s*(?:TOTAL|Grand Total)?'
@@ -185,10 +215,9 @@ def create_app() -> Flask:
             if details['total_amount']:
                 break
 
-        # Extract individual items and their prices
+        # Extract individual items and their prices.
         item_pattern = r'^(?P<item>.+?)\s+(?P<price>[\$€£]?\s*\d+(?:[,\s]\d+)*(?:\.\d{1,2})?)\s*$'
         for line in lines:
-            # Skip lines that likely contain totals or other keywords
             if re.search(r'\b(total|amount|tax|discount|invoice|bill)\b', line, re.IGNORECASE):
                 continue
             match = re.match(item_pattern, line)
@@ -200,7 +229,7 @@ def create_app() -> Flask:
             else:
                 app.logger.debug(f"Item extraction: No match for line: '{line}'")
 
-        # Extract tax amount
+        # Extract tax amount.
         tax_pattern = r'\b(?:Tax|VAT)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)'
         for line in lines:
             match = re.search(tax_pattern, line, re.IGNORECASE)
@@ -208,7 +237,7 @@ def create_app() -> Flask:
                 details['tax'] = match.group(1).strip()
                 break
 
-        # Extract discount amount
+        # Extract discount amount.
         discount_pattern = r'\b(?:Discount|Disc\.?)\b[^\d\$€£]*([\$€£]?\s*\d{1,3}(?:[,\s]\d{3})*(?:\.\d{2})?)'
         for line in lines:
             match = re.search(discount_pattern, line, re.IGNORECASE)
@@ -219,6 +248,9 @@ def create_app() -> Flask:
         return details
 
     def categorize_expense(merchant: Optional[str], items: List[Dict[str, str]]) -> str:
+        """
+        Categorize the expense based on the merchant name and item keywords.
+        """
         categories = {
             'grocery': ['grocery', 'supermarket', 'market'],
             'dining': ['restaurant', 'cafe', 'diner'],
@@ -228,12 +260,16 @@ def create_app() -> Flask:
         }
         if merchant:
             merchant_lower = merchant.lower()
-            for cat, keywords in categories.items():
+            for category, keywords in categories.items():
                 if any(keyword in merchant_lower for keyword in keywords):
-                    return cat
+                    return category
         return 'others'
 
     def process_pdf(file_path: str) -> str:
+        """
+        Convert a PDF file to images using Poppler, perform OCR on each page,
+        and aggregate the OCR text.
+        """
         full_ocr_text = ""
         try:
             poppler_path = app.config['POPPLER_PATH']
@@ -261,6 +297,10 @@ def create_app() -> Flask:
         return full_ocr_text
 
     def process_receipt_file(file_path: str) -> Optional[Receipt]:
+        """
+        Process an uploaded receipt file (PDF or image), perform OCR, extract details,
+        and save the receipt and its items to the database.
+        """
         with app.app_context():
             try:
                 if file_path.lower().endswith('.pdf'):
@@ -300,6 +340,7 @@ def create_app() -> Flask:
                 db.session.add(receipt)
                 db.session.commit()
 
+                # Process individual receipt items.
                 for item in details.get('items', []):
                     if item.get('name') and item.get('amount'):
                         receipt_item = ReceiptItem(
@@ -316,8 +357,12 @@ def create_app() -> Flask:
                 db.session.rollback()
                 return None
 
+    #########################################
+    #             Application Routes        #
+    #########################################
     @app.route('/')
     def index():
+        """Dashboard view: lists receipts and shows aggregated statistics."""
         receipts = Receipt.query.order_by(Receipt.id.desc()).all()
         total_amount = sum(float(r.total_amount) for r in receipts if r.total_amount)
         average_amount = total_amount / len(receipts) if receipts else 0.0
@@ -328,6 +373,10 @@ def create_app() -> Flask:
 
     @app.route('/upload', methods=['GET', 'POST'])
     def upload():
+        """
+        Handle file uploads. Uses a ThreadPoolExecutor to process multiple
+        receipt files concurrently.
+        """
         if request.method == 'POST':
             files = request.files.getlist('receipt_files')
             if not files:
@@ -356,6 +405,9 @@ def create_app() -> Flask:
 
     @app.route('/reports')
     def reports():
+        """
+        Generate reports summarizing expenses by category and month.
+        """
         receipts = Receipt.query.order_by(Receipt.id.desc()).all()
         category_data: Dict[str, float] = {}
         monthly_data: Dict[str, float] = {}
@@ -376,10 +428,11 @@ def create_app() -> Flask:
 
     @app.route('/receipt/<int:receipt_id>/edit', methods=['GET', 'POST'])
     def edit_receipt(receipt_id: int):
+        """
+        Edit a specific receipt. On POST, update the receipt details in the database.
+        """
         receipt = Receipt.query.get_or_404(receipt_id)
         if request.method == 'POST':
-            # Instead of using update_from_dict (which may not be defined),
-            # update each attribute manually.
             receipt.merchant = request.form.get('merchant')
             receipt.date_time = parse_date(request.form.get('date_time'))
             receipt.total_amount = parse_decimal(request.form.get('total_amount'))
@@ -400,6 +453,9 @@ def create_app() -> Flask:
 
     @app.route('/export/<string:export_format>')
     def export_data(export_format: str):
+        """
+        Export receipt data in CSV format. Currently, only CSV export is supported.
+        """
         if export_format.lower() != 'csv':
             flash("Only CSV export is supported.", "warning")
             return redirect(url_for('index'))
@@ -428,6 +484,9 @@ def create_app() -> Flask:
 
     @app.route('/ocr_preview', methods=['POST'])
     def ocr_preview():
+        """
+        Provide a preview of the OCR output for an uploaded file.
+        """
         file = request.files.get('file')
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
@@ -439,6 +498,9 @@ def create_app() -> Flask:
 
     @app.route('/voice_search', methods=['POST'])
     def voice_search():
+        """
+        Search receipts based on a voice-to-text query.
+        """
         query = request.form.get('query')
         if not query:
             return jsonify({'error': 'No query provided.'}), 400
@@ -451,18 +513,20 @@ def create_app() -> Flask:
 
     @app.route('/notifications')
     def notifications():
+        """Return notifications (currently an empty list)."""
         return jsonify({'notifications': []})
 
     @app.route('/service-worker.js')
     def service_worker():
+        """Serve the service worker script for PWA support."""
         return app.send_static_file('js/service-worker.js')
 
     return app
 
-# Create a module-level "app" variable so that Gunicorn can import it as "app:app"
+# Create a module-level app variable for WSGI servers.
 app = create_app()
 
-# If running locally, you can also initialize the DB and run the server.
+# When running locally, initialize the database and run the server.
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
