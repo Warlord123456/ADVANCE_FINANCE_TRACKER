@@ -3,6 +3,8 @@ import re
 import io
 import tempfile
 import logging
+import shutil
+
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Tuple, Dict, Any, List, Optional
@@ -27,22 +29,13 @@ from models import Receipt, ReceiptItem
 #########################################
 import sys
 
-# Determine the absolute path to the current directory.
-current_dir = os.path.dirname(os.path.abspath(__file__))
+tesseract_path = shutil.which("tesseract")
 
-# Construct the path to the Tesseract executable located in the local 'tesseract' folder.
-# For Render, if you have bundled Tesseract in your repository, ensure the folder and file exist.
-if sys.platform.startswith('win'):
-    tesseract_executable = os.path.join(current_dir, 'tesseract', 'tesseract.exe')
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+    print(f"Tesseract found at: {tesseract_path}")
 else:
-    tesseract_executable = os.path.join(current_dir, 'tesseract', 'tesseract')
-
-# Log a warning if the executable is not found.
-if not os.path.exists(tesseract_executable):
-    logging.warning(f"Tesseract executable not found at: {tesseract_executable}")
-
-# Set the Tesseract command for pytesseract.
-pytesseract.pytesseract.tesseract_cmd = tesseract_executable
+    print("Tesseract not found. Make sure it is installed.")
 
 #########################################
 #        Helper Conversion Functions    #
